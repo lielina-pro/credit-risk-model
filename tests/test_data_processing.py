@@ -6,4 +6,3 @@ def test_placeholder():
 def test_placeholder_two():
     """Second placeholder to satisfy pytest collection."""
     assert 1 + 1 == 2
-    
