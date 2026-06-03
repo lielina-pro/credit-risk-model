@@ -1,16 +1,49 @@
 version: "3.9"
+
 services:
+
+  # ── Credit Risk Prediction API ────────────────────────────────────────────
   api:
-    build: .
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: credit_risk_api
     ports:
       - "8000:8000"
     environment:
-      - MLFLOW_TRACKING_URI=http://mlflow:5000
-    depends_on:
-      - mlflow
+      - MLFLOW_TRACKING_URI=sqlite:///mlflow.db
+      - MODEL_NAME=CreditRiskProxyModel
+      - MODEL_STAGE=Staging
+      - RISK_THRESHOLD=0.5
+      - PYTHONPATH=/app
+    volumes:
+      # Mount mlflow.db so the container can read the model registry
+      - ./mlflow.db:/app/mlflow.db:ro
+      # Mount mlartifacts so the container can load model pickle files
+      - ./mlartifacts:/app/mlartifacts:ro
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8000/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 40s
+    restart: unless-stopped
 
+  # ── MLflow Tracking Server (optional — for experiment UI) ─────────────────
   mlflow:
-    image: ghcr.io/mlflow/mlflow:v2.10.0
+    image: python:3.11-slim
+    container_name: mlflow_server
+    working_dir: /app
+    command: >
+      bash -c "pip install mlflow --quiet &&
+               mlflow server
+               --backend-store-uri sqlite:///mlflow.db
+               --default-artifact-root ./mlartifacts
+               --host 0.0.0.0
+               --port 5000"
     ports:
       - "5000:5000"
-    command: mlflow server --host 0.0.0.0 --port 5000
+    volumes:
+      - ./mlflow.db:/app/mlflow.db
+      - ./mlartifacts:/app/mlartifacts
+    restart: unless-stopped
