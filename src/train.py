@@ -464,4 +464,3 @@ if __name__ == "__main__":
     )
     args = parser.parse_args()
     main(data_path=args.data, quick=args.quick)
-
