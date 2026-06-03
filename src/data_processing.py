@@ -47,6 +47,7 @@ log = logging.getLogger(__name__)
 # STEP 1 — Drop constant / near-zero-variance columns
 # ─────────────────────────────────────────────────────────────────────────────
 
+
 class DropConstantColumns(BaseEstimator, TransformerMixin):
     """
     Remove columns whose unique-value count is 1 (constants) plus any
@@ -76,8 +77,11 @@ class DropConstantColumns(BaseEstimator, TransformerMixin):
         constant = [c for c in X.columns if X[c].nunique() <= 1]
         explicit = [c for c in self.DEFAULT_DROP + self.extra_drop if c in X.columns]
         self.cols_to_drop_ = list(set(constant + explicit))
-        log.info("DropConstantColumns: removing %d columns → %s",
-                 len(self.cols_to_drop_), self.cols_to_drop_)
+        log.info(
+            "DropConstantColumns: removing %d columns → %s",
+            len(self.cols_to_drop_),
+            self.cols_to_drop_,
+        )
         return self
 
     def transform(self, X, y=None):
@@ -87,6 +91,7 @@ class DropConstantColumns(BaseEstimator, TransformerMixin):
 # ─────────────────────────────────────────────────────────────────────────────
 # STEP 2 — Extract temporal features from TransactionStartTime
 # ─────────────────────────────────────────────────────────────────────────────
+
 
 class TemporalFeatureExtractor(BaseEstimator, TransformerMixin):
     """
@@ -103,16 +108,18 @@ class TemporalFeatureExtractor(BaseEstimator, TransformerMixin):
     def transform(self, X, y=None):
         X = X.copy()
         if self.TIMESTAMP_COL not in X.columns:
-            log.warning("TemporalFeatureExtractor: '%s' not found, skipping.",
-                        self.TIMESTAMP_COL)
+            log.warning(
+                "TemporalFeatureExtractor: '%s' not found, skipping.",
+                self.TIMESTAMP_COL,
+            )
             return X
 
         ts = pd.to_datetime(X[self.TIMESTAMP_COL], utc=True, errors="coerce")
-        X["tx_hour"]        = ts.dt.hour
-        X["tx_day"]         = ts.dt.day
-        X["tx_month"]       = ts.dt.month
-        X["tx_year"]        = ts.dt.year
-        X["tx_day_of_week"] = ts.dt.dayofweek   # 0=Monday … 6=Sunday
+        X["tx_hour"] = ts.dt.hour
+        X["tx_day"] = ts.dt.day
+        X["tx_month"] = ts.dt.month
+        X["tx_year"] = ts.dt.year
+        X["tx_day_of_week"] = ts.dt.dayofweek  # 0=Monday … 6=Sunday
         X.drop(columns=[self.TIMESTAMP_COL], inplace=True)
 
         log.info("TemporalFeatureExtractor: extracted 5 temporal features.")
@@ -122,6 +129,7 @@ class TemporalFeatureExtractor(BaseEstimator, TransformerMixin):
 # ─────────────────────────────────────────────────────────────────────────────
 # STEP 3 — Debit / Credit flag from Amount sign
 # ─────────────────────────────────────────────────────────────────────────────
+
 
 class DebitFlagExtractor(BaseEstimator, TransformerMixin):
     """
@@ -151,6 +159,7 @@ class DebitFlagExtractor(BaseEstimator, TransformerMixin):
 # STEP 4 — Customer-level aggregate features (RFM + statistical)
 # ─────────────────────────────────────────────────────────────────────────────
 
+
 class CustomerAggregator(BaseEstimator, TransformerMixin):
     """
     Compute per-customer aggregates and merge them back to transaction level.
@@ -170,34 +179,39 @@ class CustomerAggregator(BaseEstimator, TransformerMixin):
 
     SNAPSHOT_DATE = pd.Timestamp("2019-02-13", tz="UTC")  # dataset max date
 
-    def __init__(self, customer_col="CustomerId", value_col="Value",
-                 ts_col="TransactionStartTime"):
+    def __init__(
+        self,
+        customer_col="CustomerId",
+        value_col="Value",
+        ts_col="TransactionStartTime",
+    ):
         self.customer_col = customer_col
-        self.value_col    = value_col
-        self.ts_col       = ts_col
-        self.agg_df_      = None
+        self.value_col = value_col
+        self.ts_col = ts_col
+        self.agg_df_ = None
 
     def fit(self, X, y=None):
         df = X.copy()
         ts = pd.to_datetime(df[self.ts_col], utc=True, errors="coerce")
 
-        agg = df.groupby(self.customer_col).agg(
-            cust_total_value     =(self.value_col, "sum"),
-            cust_avg_value       =(self.value_col, "mean"),
-            cust_tx_count        =(self.value_col, "count"),
-            cust_std_value       =(self.value_col, "std"),
-            cust_max_value       =(self.value_col, "max"),
-            cust_min_value       =(self.value_col, "min"),
-            cust_unique_products =("ProductId",    "nunique"),
-            cust_unique_channels =("ChannelId",    "nunique"),
-        ).reset_index()
+        agg = (
+            df.groupby(self.customer_col)
+            .agg(
+                cust_total_value=(self.value_col, "sum"),
+                cust_avg_value=(self.value_col, "mean"),
+                cust_tx_count=(self.value_col, "count"),
+                cust_std_value=(self.value_col, "std"),
+                cust_max_value=(self.value_col, "max"),
+                cust_min_value=(self.value_col, "min"),
+                cust_unique_products=("ProductId", "nunique"),
+                cust_unique_channels=("ChannelId", "nunique"),
+            )
+            .reset_index()
+        )
 
         # Recency: days since last transaction
         recency_df = (
-            df.assign(_ts=ts)
-            .groupby(self.customer_col)["_ts"]
-            .max()
-            .reset_index()
+            df.assign(_ts=ts).groupby(self.customer_col)["_ts"].max().reset_index()
         )
         recency_df["cust_recency_days"] = (
             self.SNAPSHOT_DATE - recency_df["_ts"]
@@ -205,12 +219,16 @@ class CustomerAggregator(BaseEstimator, TransformerMixin):
 
         agg = agg.merge(
             recency_df[[self.customer_col, "cust_recency_days"]],
-            on=self.customer_col, how="left"
+            on=self.customer_col,
+            how="left",
         )
         agg["cust_std_value"] = agg["cust_std_value"].fillna(0)
         self.agg_df_ = agg
-        log.info("CustomerAggregator: computed 9 customer-level features "
-                 "for %d customers.", len(agg))
+        log.info(
+            "CustomerAggregator: computed 9 customer-level features "
+            "for %d customers.",
+            len(agg),
+        )
         return self
 
     def transform(self, X, y=None):
@@ -223,6 +241,7 @@ class CustomerAggregator(BaseEstimator, TransformerMixin):
 # ─────────────────────────────────────────────────────────────────────────────
 # STEP 5 — Log-transform skewed numerical features
 # ─────────────────────────────────────────────────────────────────────────────
+
 
 class LogTransformer(BaseEstimator, TransformerMixin):
     """
@@ -245,7 +264,7 @@ class LogTransformer(BaseEstimator, TransformerMixin):
         return self
 
     def transform(self, X, y=None):
-        X    = X.copy()
+        X = X.copy()
         cols = self.columns if self.columns else self.DEFAULT_COLS
         cols = [c for c in cols if c in X.columns]
         for c in cols:
@@ -258,6 +277,7 @@ class LogTransformer(BaseEstimator, TransformerMixin):
 # STEP 6 — Categorical encoding  (One-Hot + Label)
 # ─────────────────────────────────────────────────────────────────────────────
 
+
 class CategoricalEncoder(BaseEstimator, TransformerMixin):
     """
     One-hot encode low-cardinality categoricals.
@@ -265,17 +285,17 @@ class CategoricalEncoder(BaseEstimator, TransformerMixin):
     Columns not found in X are silently skipped.
     """
 
-    OHE_COLS   = ["ProductCategory", "ChannelId", "ProviderId", "PricingStrategy"]
+    OHE_COLS = ["ProductCategory", "ChannelId", "ProviderId", "PricingStrategy"]
     LABEL_COLS = ["ProductId"]
 
     def __init__(self, ohe_cols=None, label_cols=None):
-        self.ohe_cols   = ohe_cols
+        self.ohe_cols = ohe_cols
         self.label_cols = label_cols
-        self.ohe_maps_   = {}
+        self.ohe_maps_ = {}
         self.label_maps_ = {}
 
     def fit(self, X, y=None):
-        ohe_cols   = self.ohe_cols   if self.ohe_cols   else self.OHE_COLS
+        ohe_cols = self.ohe_cols if self.ohe_cols else self.OHE_COLS
         label_cols = self.label_cols if self.label_cols else self.LABEL_COLS
 
         for col in ohe_cols:
@@ -287,8 +307,11 @@ class CategoricalEncoder(BaseEstimator, TransformerMixin):
                 cats = sorted(X[col].astype(str).unique())
                 self.label_maps_[col] = {v: i for i, v in enumerate(cats)}
 
-        log.info("CategoricalEncoder: OHE cols=%s  Label cols=%s",
-                 list(self.ohe_maps_.keys()), list(self.label_maps_.keys()))
+        log.info(
+            "CategoricalEncoder: OHE cols=%s  Label cols=%s",
+            list(self.ohe_maps_.keys()),
+            list(self.label_maps_.keys()),
+        )
         return self
 
     def transform(self, X, y=None):
@@ -315,6 +338,7 @@ class CategoricalEncoder(BaseEstimator, TransformerMixin):
 # STEP 7 — Handle missing values
 # ─────────────────────────────────────────────────────────────────────────────
 
+
 class MissingValueImputer(BaseEstimator, TransformerMixin):
     """
     Numeric columns  → median imputation
@@ -323,8 +347,8 @@ class MissingValueImputer(BaseEstimator, TransformerMixin):
 
     def __init__(self):
         self.num_imputer_ = None
-        self.num_cols_    = []
-        self.obj_cols_    = []
+        self.num_cols_ = []
+        self.obj_cols_ = []
 
     def fit(self, X, y=None):
         self.num_cols_ = X.select_dtypes(include="number").columns.tolist()
@@ -336,8 +360,11 @@ class MissingValueImputer(BaseEstimator, TransformerMixin):
 
         missing_num = X[self.num_cols_].isnull().sum().sum()
         missing_obj = X[self.obj_cols_].isnull().sum().sum() if self.obj_cols_ else 0
-        log.info("MissingValueImputer: %d numeric NaN | %d object NaN",
-                 missing_num, missing_obj)
+        log.info(
+            "MissingValueImputer: %d numeric NaN | %d object NaN",
+            missing_num,
+            missing_obj,
+        )
         return self
 
     def transform(self, X, y=None):
@@ -354,6 +381,7 @@ class MissingValueImputer(BaseEstimator, TransformerMixin):
 # STEP 8 — Normalize / Standardize numerical features
 # ─────────────────────────────────────────────────────────────────────────────
 
+
 class FeatureScaler(BaseEstimator, TransformerMixin):
     """
     StandardScaler on all numeric columns except binary flags and the target.
@@ -363,18 +391,15 @@ class FeatureScaler(BaseEstimator, TransformerMixin):
     EXCLUDE = {"is_debit", "FraudResult", "is_high_risk"}
 
     def __init__(self, exclude=None):
-        self.exclude   = exclude or set()
+        self.exclude = exclude or set()
         self.scale_cols_ = []
-        self.scaler_     = StandardScaler()
+        self.scaler_ = StandardScaler()
 
     def fit(self, X, y=None):
         skip = self.EXCLUDE | set(self.exclude)
-        num  = X.select_dtypes(include="number").columns.tolist()
+        num = X.select_dtypes(include="number").columns.tolist()
         # exclude binary (only 0/1) and explicitly excluded
-        self.scale_cols_ = [
-            c for c in num
-            if c not in skip and X[c].nunique() > 2
-        ]
+        self.scale_cols_ = [c for c in num if c not in skip and X[c].nunique() > 2]
         if self.scale_cols_:
             self.scaler_.fit(X[self.scale_cols_])
         log.info("FeatureScaler: scaling %d columns.", len(self.scale_cols_))
@@ -390,6 +415,7 @@ class FeatureScaler(BaseEstimator, TransformerMixin):
 # ─────────────────────────────────────────────────────────────────────────────
 # STEP 9 — Weight of Evidence (WoE) encoding
 # ─────────────────────────────────────────────────────────────────────────────
+
 
 class WoEEncoder(BaseEstimator, TransformerMixin):
     """
@@ -414,31 +440,30 @@ class WoEEncoder(BaseEstimator, TransformerMixin):
 
     DEFAULT_WOE_COLS = ["ProductCategory", "ChannelId", "ProviderId"]
 
-    def __init__(self, target_col="is_high_risk",
-                 woe_cols=None, iv_threshold=0.02):
-        self.target_col   = target_col
-        self.woe_cols     = woe_cols or self.DEFAULT_WOE_COLS
+    def __init__(self, target_col="is_high_risk", woe_cols=None, iv_threshold=0.02):
+        self.target_col = target_col
+        self.woe_cols = woe_cols or self.DEFAULT_WOE_COLS
         self.iv_threshold = iv_threshold
-        self.woe_maps_    = {}
-        self.iv_values_   = {}
-        self.kept_cols_   = []
+        self.woe_maps_ = {}
+        self.iv_values_ = {}
+        self.kept_cols_ = []
 
     # ── manual WoE calculation (fallback) ───────────────────
     @staticmethod
     def _compute_woe_iv(series, target):
         df = pd.DataFrame({"x": series.astype(str), "y": target})
-        total_events     = max(df["y"].sum(), 1)
-        total_nonevents  = max((df["y"] == 0).sum(), 1)
+        total_events = max(df["y"].sum(), 1)
+        total_nonevents = max((df["y"] == 0).sum(), 1)
 
         woe_map = {}
-        iv      = 0.0
+        iv = 0.0
         for cat, grp in df.groupby("x"):
-            events    = grp["y"].sum()
+            events = grp["y"].sum()
             nonevents = (grp["y"] == 0).sum()
-            dist_e    = max(events,    0.5) / total_events
-            dist_ne   = max(nonevents, 0.5) / total_nonevents
-            woe_val   = np.log(dist_e / dist_ne)
-            iv       += (dist_e - dist_ne) * woe_val
+            dist_e = max(events, 0.5) / total_events
+            dist_ne = max(nonevents, 0.5) / total_nonevents
+            woe_val = np.log(dist_e / dist_ne)
+            iv += (dist_e - dist_ne) * woe_val
             woe_map[cat] = woe_val
         return woe_map, iv
 
@@ -449,20 +474,22 @@ class WoEEncoder(BaseEstimator, TransformerMixin):
         elif self.target_col in X.columns:
             target = X[self.target_col].reset_index(drop=True)
         else:
-            log.warning("WoEEncoder: target '%s' not found — skipping WoE.",
-                        self.target_col)
+            log.warning(
+                "WoEEncoder: target '%s' not found — skipping WoE.", self.target_col
+            )
             return self
 
         # Try xverse first
         try:
             from xverse.transformer import WOE
+
             woe_cols_present = [c for c in self.woe_cols if c in X.columns]
             if not woe_cols_present:
                 return self
             clf = WOE()
             clf.fit(X[woe_cols_present], target)
             self._xverse_clf = clf
-            self._use_xverse  = True
+            self._use_xverse = True
             log.info("WoEEncoder: xverse fitted on %s", woe_cols_present)
             # Extract IV from xverse
             for col in woe_cols_present:
@@ -473,11 +500,15 @@ class WoEEncoder(BaseEstimator, TransformerMixin):
                 except Exception:
                     self.iv_values_[col] = 0.0
             self.kept_cols_ = [
-                c for c in woe_cols_present
+                c
+                for c in woe_cols_present
                 if self.iv_values_.get(c, 0) >= self.iv_threshold
             ]
-            log.info("WoEEncoder: IV values %s | keeping %s",
-                     self.iv_values_, self.kept_cols_)
+            log.info(
+                "WoEEncoder: IV values %s | keeping %s",
+                self.iv_values_,
+                self.kept_cols_,
+            )
         except Exception as e:
             log.warning("WoEEncoder: xverse failed (%s) — using manual WoE.", e)
             self._use_xverse = False
@@ -487,12 +518,15 @@ class WoEEncoder(BaseEstimator, TransformerMixin):
                 woe_map, iv = self._compute_woe_iv(
                     X[col].reset_index(drop=True), target
                 )
-                self.woe_maps_[col]  = woe_map
+                self.woe_maps_[col] = woe_map
                 self.iv_values_[col] = iv
                 if iv >= self.iv_threshold:
                     self.kept_cols_.append(col)
-            log.info("WoEEncoder (manual): IV=%s | keeping %s",
-                     self.iv_values_, self.kept_cols_)
+            log.info(
+                "WoEEncoder (manual): IV=%s | keeping %s",
+                self.iv_values_,
+                self.kept_cols_,
+            )
         return self
 
     def transform(self, X, y=None):
@@ -505,7 +539,9 @@ class WoEEncoder(BaseEstimator, TransformerMixin):
                 woe_cols_present = [c for c in self.kept_cols_ if c in X.columns]
                 transformed = self._xverse_clf.transform(X[woe_cols_present])
                 for col in woe_cols_present:
-                    woe_col = f"{col}_WoE" if f"{col}_WoE" in transformed.columns else col
+                    woe_col = (
+                        f"{col}_WoE" if f"{col}_WoE" in transformed.columns else col
+                    )
                     X[f"{col}_woe"] = transformed[woe_col].values
                     X.drop(columns=[col], errors="ignore", inplace=True)
             except Exception as e:
@@ -522,6 +558,7 @@ class WoEEncoder(BaseEstimator, TransformerMixin):
 # ─────────────────────────────────────────────────────────────────────────────
 # PIPELINE BUILDER
 # ─────────────────────────────────────────────────────────────────────────────
+
 
 def build_pipeline(target_col: str = "is_high_risk") -> Pipeline:
     """
@@ -545,16 +582,16 @@ def build_pipeline(target_col: str = "is_high_risk") -> Pipeline:
         # CustomerAggregator needs TransactionStartTime → must run first
         ("customer_agg", CustomerAggregator()),
         # DebitFlagExtractor needs Amount → must run before DropConstantColumns
-        ("debit_flag",   DebitFlagExtractor()),
+        ("debit_flag", DebitFlagExtractor()),
         # TemporalFeatureExtractor parses & drops TransactionStartTime
-        ("temporal",     TemporalFeatureExtractor()),
+        ("temporal", TemporalFeatureExtractor()),
         # Now safe to drop Amount, CountryCode, IDs, raw timestamp
-        ("drop_const",   DropConstantColumns()),
-        ("log_transform",LogTransformer()),
-        ("cat_encode",   CategoricalEncoder()),
-        ("imputer",      MissingValueImputer()),
-        ("scaler",       FeatureScaler()),
-        ("woe",          WoEEncoder(target_col=target_col)),
+        ("drop_const", DropConstantColumns()),
+        ("log_transform", LogTransformer()),
+        ("cat_encode", CategoricalEncoder()),
+        ("imputer", MissingValueImputer()),
+        ("scaler", FeatureScaler()),
+        ("woe", WoEEncoder(target_col=target_col)),
     ]
     return Pipeline(steps=steps)
 
@@ -562,6 +599,7 @@ def build_pipeline(target_col: str = "is_high_risk") -> Pipeline:
 # ─────────────────────────────────────────────────────────────────────────────
 # CONVENIENCE RUNNER
 # ─────────────────────────────────────────────────────────────────────────────
+
 
 def run_pipeline(
     data_path: str,
@@ -608,8 +646,9 @@ def run_pipeline(
     X_processed[target_col] = y.values
 
     log.info("Processed data shape: %s", X_processed.shape)
-    log.info("Final columns (%d): %s",
-             len(X_processed.columns), X_processed.columns.tolist())
+    log.info(
+        "Final columns (%d): %s", len(X_processed.columns), X_processed.columns.tolist()
+    )
 
     if save_path:
         X_processed.to_csv(save_path, index=False)
@@ -625,7 +664,7 @@ def run_pipeline(
 if __name__ == "__main__":
     import os
 
-    RAW_PATH  = os.path.join("data", "raw", "data.csv")
+    RAW_PATH = os.path.join("data", "raw", "data.csv")
     SAVE_PATH = os.path.join("data", "processed", "features.csv")
     os.makedirs(os.path.dirname(SAVE_PATH), exist_ok=True)
 
