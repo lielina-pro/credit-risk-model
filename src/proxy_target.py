@@ -39,8 +39,6 @@ import matplotlib
 # non-interactive backend for CI/CD
 import matplotlib.pyplot as plt
 import matplotlib.ticker as mticker
-
-
 from sklearn.cluster import KMeans
 from sklearn.preprocessing import RobustScaler
 
