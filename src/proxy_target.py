@@ -36,13 +36,15 @@ import numpy as np
 import pandas as pd
 import matplotlib
 
-matplotlib.use("Agg")  # non-interactive backend for CI/CD
+# non-interactive backend for CI/CD
 import matplotlib.pyplot as plt
 import matplotlib.ticker as mticker
+
 
 from sklearn.cluster import KMeans
 from sklearn.preprocessing import RobustScaler
 
+matplotlib.use("Agg")
 warnings.filterwarnings("ignore")
 logging.basicConfig(level=logging.INFO, format="%(levelname)s  %(message)s")
 log = logging.getLogger(__name__)
